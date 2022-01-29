@@ -59,7 +59,7 @@ def get_types(material):
 
 
 mapswanted = {"Color": "sRGB", "Displacement": "Non-Color", "Metalness": "Non-Color", "NormalGL": "Non-Color",
-              "Roughness": "Non-Color"}
+              "Roughness": "Non-Color", "Emission": "sRGB"}
 
 
 class SetMaterial(bpy.types.Operator):
@@ -123,6 +123,8 @@ class SetMaterial(bpy.types.Operator):
                 nt.links.new(nm.outputs["Normal"], pbsdf.inputs["Normal"])
             elif map_type == "Roughness":
                 nt.links.new(node.outputs["Color"], pbsdf.inputs["Roughness"])
+            elif map_type == "Emission":
+                nt.links.new(node.outputs["Color"], pbsdf.inputs["Emission"])
         for i in context.selected_objects:
             if i.type == "MESH" or i.type == "CURVE":
                 if len(i.material_slots) == 0:
@@ -397,38 +399,22 @@ def write_cache():
     f.close()
 
 
+classes = [TagPropertyGroup, FilterSettings, NextPage, PrevPage, SetMaterial, MaterialSwitcherPanel, FilterPanel,
+           FilterNamePanel, FilterTagPanel, MatBrowserPanel, RefreshCache, RefreshTags]
+
+
 def register():
     pcoll = bpy.utils.previews.new()
     preview_collections["main"] = pcoll
-    bpy.utils.register_class(TagPropertyGroup)
-    bpy.utils.register_class(FilterSettings)
-    bpy.utils.register_class(NextPage)
-    bpy.utils.register_class(PrevPage)
-    bpy.utils.register_class(SetMaterial)
-    bpy.utils.register_class(MaterialSwitcherPanel)
-    bpy.utils.register_class(FilterPanel)
-    bpy.utils.register_class(FilterNamePanel)
-    bpy.utils.register_class(FilterTagPanel)
-    bpy.utils.register_class(MatBrowserPanel)
-    bpy.utils.register_class(RefreshCache)
-    bpy.utils.register_class(RefreshTags)
+    for i in classes:
+        bpy.utils.register_class(i)
     bpy.types.Scene.mat_browser_filter_settings = bpy.props.PointerProperty(type=FilterSettings)
     read_cache()
 
 
 def unregister():
-    bpy.utils.unregister_class(TagPropertyGroup)
-    bpy.utils.unregister_class(FilterSettings)
-    bpy.utils.unregister_class(NextPage)
-    bpy.utils.unregister_class(PrevPage)
-    bpy.utils.unregister_class(SetMaterial)
-    bpy.utils.unregister_class(MaterialSwitcherPanel)
-    bpy.utils.unregister_class(RefreshCache)
-    bpy.utils.unregister_class(FilterPanel)
-    bpy.utils.unregister_class(FilterNamePanel)
-    bpy.utils.unregister_class(FilterTagPanel)
-    bpy.utils.unregister_class(MatBrowserPanel)
-    bpy.utils.unregister_class(RefreshTags)
+    for i in classes:
+        bpy.utils.unregister_class(i)
     del bpy.types.Scene.mat_browser_filter_settings
 
 
