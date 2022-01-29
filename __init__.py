@@ -2,13 +2,14 @@ import math
 import pickle
 import re
 import zipfile
-from copy import copy
-
 import bpy
 import requests
 import bpy.utils.previews
 import json
 import os
+from . import global_vars
+from . import ui
+from . import asset
 
 bl_info = {
     "name": "Material Browser",
@@ -16,47 +17,6 @@ bl_info = {
     "version": (1, 0),
     "category": "Material",
 }
-addon_keymaps = []
-cache = {}
-preview_collections = {}
-tags: set = set()
-
-
-def get_types(material):
-    result = [[], []]
-    name = material["assetId"]
-    if "zip" in material["downloadFolders"]["/"]["downloadFiletypeCategories"]:
-        for i in material["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"]["downloads"]:
-            cache_path = os.path.join(os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache"
-                                                                                                             "/downloads"),
-                                                   name), i["attribute"])
-            # print(cache_path)
-            if i["attribute"] == "2kPNG-PNG":
-                i["attribute"] = "2K-PNG"
-            if i["attribute"] == "1kPNG-PNG":
-                i["attribute"] = "1K-PNG"
-            if i["attribute"] == "4kPNG-PNG":
-                i["attribute"] = "4K-PNG"
-            if i["attribute"] == "8kPNG-PNG":
-                i["attribute"] = "8K-PNG"
-            if i["attribute"] == "1kPNG":
-                i["attribute"] = "1K-PNG"
-            if i["attribute"] == "2kPNG":
-                i["attribute"] = "2K-PNG"
-            if i["attribute"] == "4kPNG":
-                i["attribute"] = "4K-PNG"
-            if i["attribute"] == "8kPNG":
-                i["attribute"] = "8K-PNG"
-            if len(i["attribute"]) > 0:
-                next_element = (int(i["attribute"][:-5]), os.path.isdir(cache_path), i["attribute"])
-                if "PNG" in i["attribute"]:
-                    result[0].append(next_element)
-                elif "JPG" in i["attribute"]:
-                    result[1].append(next_element)
-        result[0].sort()
-        result[1].sort()
-    return result
-
 
 mapswanted = {"Color": "sRGB", "Displacement": "Non-Color", "Metalness": "Non-Color", "NormalGL": "Non-Color",
               "Roughness": "Non-Color", "Emission": "sRGB"}
@@ -76,7 +36,8 @@ class SetMaterial(bpy.types.Operator):
                          self.mat_name), self.mat_type)
         if not os.path.isdir(cache_path):
             os.makedirs(cache_path, mode=0o744)
-            for i in cache[self.mat_name]["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"]["downloads"]:
+            for i in global_vars.cache[self.mat_name]["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"][
+                "downloads"]:
                 if i["attribute"] == self.mat_type:
                     data = requests.get(i["downloadLink"], headers={'User-Agent': "Python"}).content
                     f = open(os.path.join(cache_path, self.mat_type + ".zip"), "wb")
@@ -149,137 +110,24 @@ class RefreshCache(bpy.types.Operator):
             data = requests.get(
                 data["nextPageHttp"],
                 headers={'User-Agent': "Python"}).json()
-            for asset in data["foundAssets"]:
-                for i in asset['tags']:
-                    tags.add(i.lower())
-                if not asset['assetId'] in cache:
-                    cache[asset['assetId']] = asset
+            for next_asset in data["foundAssets"]:
+                for i in next_asset['tags']:
+                    global_vars.tags.add(i.lower())
+                if not next_asset['assetId'] in global_vars.cache:
+                    global_vars.cache[next_asset['assetId']] = next_asset
                     filepath = os.path.join(
                         os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache"), "previews"),
-                        asset["assetId"] + ".png")
+                        next_asset["assetId"] + ".png")
                     if not os.path.isfile(filepath):
-                        image = requests.get(asset["previewImage"]["128-PNG"])
+                        image = requests.get(next_asset["previewImage"]["128-PNG"])
                         f = open(filepath, "wb")
                         f.write(image.content)
                         f.close()
-                    preview_collections["main"].load(asset['assetId'], filepath,
-                                                     "IMAGE")
+                    global_vars.preview_collections["main"].load(next_asset['assetId'], filepath,
+                                                                 "IMAGE")
         write_cache()
         bpy.ops.material.tex_browser_refresh_tags()
         return {"FINISHED"}
-
-
-page = 0
-pageSize = 25
-
-
-class NextPage(bpy.types.Operator):
-    """Moves to the next page in the texture browser"""
-    bl_idname = "material.tex_browser_next_page"
-    bl_label = "Next Page"
-    bl_options = {"INTERNAL", "REGISTER"}
-
-    def execute(self, context):
-        global page
-        global pageSize
-        num_pages = math.ceil(float(len(cache)) / float(pageSize))
-        if page < num_pages - 1:
-            page += 1
-        return {"FINISHED"}
-
-
-class PrevPage(bpy.types.Operator):
-    """Moves to the previous page in the texture browser"""
-    bl_idname = "material.tex_browser_prev_page"
-    bl_label = "Previous Page"
-    bl_options = {"INTERNAL", "REGISTER"}
-
-    def execute(self, context):
-        global page
-        if page > 0:
-            page -= 1
-        return {"FINISHED"}
-
-
-class MaterialSwitcherPanel(bpy.types.Panel):
-    bl_label = "Material Browser"
-    bl_idname = "OBJECT_PT_mat_switcher"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "material"
-
-    def draw(self, context):
-        layout = self.layout
-        if not cache:
-            row = layout.row()
-            row.label(text="Cache is empty", icon="ERROR")
-        row = layout.row()
-        row.operator("material.tex_browser_refresh_cache")
-
-
-def filter_by_name(name, inputs: list):
-    result = []
-    for i in inputs:
-        if name.lower() in i.lower() or name.lower() in cache[i]["displayName"].lower():
-            result.append(i)
-    return result
-
-
-def filter_by_tag(tag, inputs: list):
-    result = []
-    for i in inputs:
-        for j in cache[i]['tags']:
-            if tag.lower() == j.lower():
-                result.append(i)
-                break
-    return result
-
-
-class MatBrowserPanel(bpy.types.Panel):
-    bl_parent_id = "OBJECT_PT_mat_switcher"
-    bl_label = "Material Browser"
-    bl_idname = "OBJECT_PT_mat_browser"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "material"
-    bl_options = {"HIDE_HEADER"}
-
-    def draw(self, context):
-        layout = self.layout
-        keys = list(cache.keys())
-        if context.scene.mat_browser_filter_settings.filter_name_bool:
-            keys = filter_by_name(context.scene.mat_browser_filter_settings.filter_name_str, keys)
-        if context.scene.mat_browser_filter_settings.filter_tag_bool:
-            for i in context.scene.mat_browser_filter_settings.tag_props:
-                if i.filter_tag:
-                    keys = filter_by_tag(i.tag_name, keys)
-        keys.sort()
-        row = layout.row()
-        row.operator("material.tex_browser_prev_page", text="", translate=False, icon="TRIA_LEFT")
-        row.label(text="Page " + str(page + 1) + "/" + str(math.ceil(float(len(keys)) / float(pageSize))))
-        row.operator("material.tex_browser_next_page", text="", translate=False, icon="TRIA_RIGHT")
-        box = layout.box()
-        grid = box.grid_flow(even_columns=True, even_rows=True)
-        startIndex = page * pageSize
-        endIndex = min(startIndex + pageSize, len(keys))
-        keys = keys[startIndex:endIndex]
-        for i in keys:
-            c = grid.box()
-            c.template_icon(icon_value=preview_collections["main"][i].icon_id, scale=5)
-            types = get_types(cache[i])
-            c.label(text=cache[i]["displayName"], translate=False)
-            for x in types:
-                r = c.row()
-                if len(x) > 0:
-                    r.label(text=x[0][2][-3:] + ":")
-                    for y in x:
-                        if y[1]:
-                            props = r.operator("object.tex_browser_set_mat", text=str(y[0]) + "K", translate=False,
-                                               icon="DISK_DRIVE")
-                        else:
-                            props = r.operator("object.tex_browser_set_mat", text=str(y[0]) + "K", translate=False)
-                        props.mat_name = i
-                        props.mat_type = y[2]
 
 
 class RefreshTags(bpy.types.Operator):
@@ -289,7 +137,7 @@ class RefreshTags(bpy.types.Operator):
     bl_options = {"INTERNAL", "REGISTER"}
 
     def execute(self, context):
-        list_tags = list(tags)
+        list_tags = list(global_vars.tags)
         list_tags.sort()
         if len(list_tags) > len(context.scene.mat_browser_filter_settings.tag_props):
             context.scene.mat_browser_filter_settings.tag_props.clear()
@@ -315,97 +163,46 @@ class FilterSettings(bpy.types.PropertyGroup):
     tag_props: bpy.props.CollectionProperty(type=TagPropertyGroup)
 
 
-class FilterPanel(bpy.types.Panel):
-    bl_parent_id = "OBJECT_PT_mat_switcher"
-    bl_idname = "OBJECT_PT_mat_browser_filter"
-    bl_label = "Filter"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-
-
-class FilterNamePanel(bpy.types.Panel):
-    bl_parent_id = "OBJECT_PT_mat_browser_filter"
-    bl_idname = "OBJECT_PT_mat_browser_filter_name"
-    bl_label = "Name"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(context.scene.mat_browser_filter_settings, "filter_name_str", text="")
-
-    def draw_header(self, context):
-        self.layout.prop(context.scene.mat_browser_filter_settings, "filter_name_bool", text="")
-
-
-class FilterTagPanel(bpy.types.Panel):
-    bl_parent_id = "OBJECT_PT_mat_browser_filter"
-    bl_idname = "OBJECT_PT_mat_browser_filter_tag"
-    bl_label = "Tags"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("material.tex_browser_refresh_tags")
-        layout.prop(context.scene.mat_browser_filter_settings, "tag_search", text="", icon="VIEWZOOM")
-        c = layout.grid_flow(columns=4, even_columns=True, even_rows=True)
-        for i in context.scene.mat_browser_filter_settings.tag_props:
-            if context.scene.mat_browser_filter_settings.tag_search.lower() in i.tag_name.lower():
-                r = c.box().row()
-                r.prop(i, "filter_tag", text="")
-                r.label(text=i.tag_name)
-
-    def draw_header(self, context):
-        self.layout.prop(context.scene.mat_browser_filter_settings, "filter_tag_bool", text="")
-
-
 def read_cache():
-    global cache
-    global tags
     cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
     if os.path.isfile(os.path.join(cache_path, "mat_cache")):
         f = open(os.path.join(cache_path, "mat_cache"), "r")
-        cache = json.loads(f.read())
+        global_vars.cache = json.loads(f.read())
         f.close()
     if os.path.isfile(os.path.join(cache_path, "tag_cache")):
         f = open(os.path.join(cache_path, "tag_cache"), "rb")
-        tags = pickle.loads(f.read())
+        global_vars.tags = pickle.loads(f.read())
         f.close()
-    if cache is not None:
-        for i in cache:
+    if global_vars.cache is not None:
+        for i in global_vars.cache:
             if not os.path.isfile(os.path.join(os.path.join(cache_path, "previews"), i + ".png")):
-                image = requests.get(cache[i]["previewImage"]["128-PNG"])
+                image = requests.get(global_vars.cache[i]["previewImage"]["128-PNG"])
                 f = open(os.path.join(os.path.join(cache_path, "previews"), i + ".png"), "wb")
                 f.write(image.content)
                 f.close()
-            preview_collections["main"].load(i, os.path.join(os.path.join(cache_path, "previews"), i + ".png"),
-                                             "IMAGE")
+            global_vars.preview_collections["main"].load(i,
+                                                         os.path.join(os.path.join(cache_path, "previews"), i + ".png"),
+                                                         "IMAGE")
 
 
 def write_cache():
     cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
     f = open(os.path.join(cache_path, "mat_cache"), "w")
-    f.write(json.dumps(cache))
+    f.write(json.dumps(global_vars.cache))
     f.close()
     f = open(os.path.join(cache_path, "tag_cache"), "wb")
-    f.write(pickle.dumps(tags))
+    f.write(pickle.dumps(global_vars.tags))
     f.close()
 
 
-classes = [TagPropertyGroup, FilterSettings, NextPage, PrevPage, SetMaterial, MaterialSwitcherPanel, FilterPanel,
-           FilterNamePanel, FilterTagPanel, MatBrowserPanel, RefreshCache, RefreshTags]
+classes = [TagPropertyGroup, FilterSettings, ui.NextPage, ui.PrevPage, SetMaterial, ui.MaterialSwitcherPanel,
+           ui.FilterPanel,
+           ui.FilterNamePanel, ui.FilterTagPanel, ui.MatBrowserPanel, RefreshCache, RefreshTags]
 
 
 def register():
     pcoll = bpy.utils.previews.new()
-    preview_collections["main"] = pcoll
+    global_vars.preview_collections["main"] = pcoll
     for i in classes:
         bpy.utils.register_class(i)
     bpy.types.Scene.mat_browser_filter_settings = bpy.props.PointerProperty(type=FilterSettings)
