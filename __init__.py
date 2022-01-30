@@ -10,6 +10,7 @@ import os
 from . import global_vars
 from . import ui
 from . import asset
+from . import loader
 
 bl_info = {
     "name": "Material Browser",
@@ -102,6 +103,7 @@ class RefreshCache(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
+        loader.load()
         data = {
             "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
                             "=downloadData,imageData,displayData,tagData"}
@@ -218,4 +220,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
