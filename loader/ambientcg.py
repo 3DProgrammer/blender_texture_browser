@@ -7,9 +7,9 @@ import os
 def load():
     new_assets = []
     data = {
-        "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
+        "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=5&include"
                         "=downloadData,imageData,displayData,tagData"}
-    while data["nextPageHttp"]:
+    while data["nextPageHttp"] and len(new_assets) < 20:
         print(data["nextPageHttp"])
         data = requests.get(
             data["nextPageHttp"],
@@ -22,11 +22,10 @@ def load():
             asset_dls = []
             for i in next_asset["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"]["downloads"]:
                 asset_dls.append(
-                    asset.Download(global_vars.DL_FORMAT_ZIP, asset.infer_dl_type(i["attribute"]), [i["downloadPath"]]))
+                    asset.Download(global_vars.DL_FORMAT_ZIP, asset.infer_dl_type(i["attribute"]), [i["downloadLink"]]))
 
             new_assets.append(asset.Asset(global_vars.ASSET_SOURCE_AMBIENTCG, next_asset['assetId'],
                                           next_asset['displayName'], asset_dls, next_asset["previewImage"]["128-PNG"],
                                           list(asset_tags)))
-
 
     return new_assets

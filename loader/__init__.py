@@ -2,7 +2,7 @@ import os
 
 import requests
 
-import global_vars
+from .. import global_vars
 from . import ambientcg
 
 

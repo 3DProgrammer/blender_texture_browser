@@ -104,31 +104,32 @@ class RefreshCache(bpy.types.Operator):
 
     def execute(self, context):
         loader.load()
-        data = {
-            "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
-                            "=downloadData,imageData,displayData,tagData"}
-        while data["nextPageHttp"]:
-            print(data["nextPageHttp"])
-            data = requests.get(
-                data["nextPageHttp"],
-                headers={'User-Agent': "Python"}).json()
-            for next_asset in data["foundAssets"]:
-                for i in next_asset['tags']:
-                    global_vars.tags.add(i.lower())
-                if not next_asset['assetId'] in global_vars.cache:
-                    global_vars.cache[next_asset['assetId']] = next_asset
-                    filepath = os.path.join(
-                        os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache"), "previews"),
-                        next_asset["assetId"] + ".png")
-                    if not os.path.isfile(filepath):
-                        image = requests.get(next_asset["previewImage"]["128-PNG"])
-                        f = open(filepath, "wb")
-                        f.write(image.content)
-                        f.close()
-                    global_vars.preview_collections["main"].load(next_asset['assetId'], filepath,
-                                                                 "IMAGE")
+        # data = {
+        #     "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
+        #                     "=downloadData,imageData,displayData,tagData"}
+        # while data["nextPageHttp"]:
+        #     print(data["nextPageHttp"])
+        #     data = requests.get(
+        #         data["nextPageHttp"],
+        #         headers={'User-Agent': "Python"}).json()
+        #     for next_asset in data["foundAssets"]:
+        #         for i in next_asset['tags']:
+        #             global_vars.tags.add(i.lower())
+        #         if not next_asset['assetId'] in global_vars.cache:
+        #             global_vars.cache[next_asset['assetId']] = next_asset
+        #             filepath = os.path.join(
+        #                 os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache"), "previews"),
+        #                 next_asset["assetId"] + ".png")
+        #             if not os.path.isfile(filepath):
+        #                 image = requests.get(next_asset["previewImage"]["128-PNG"])
+        #                 f = open(filepath, "wb")
+        #                 f.write(image.content)
+        #                 f.close()
+        #             global_vars.preview_collections["main"].load(next_asset['assetId'], filepath,
+        #                                                          "IMAGE")
         write_cache()
-        bpy.ops.material.tex_browser_refresh_tags()
+        # bpy.ops.material.tex_browser_refresh_tags()
+        # print(global_vars.assets)
         return {"FINISHED"}
 
 
@@ -167,9 +168,13 @@ class FilterSettings(bpy.types.PropertyGroup):
 
 def read_cache():
     cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
-    if os.path.isfile(os.path.join(cache_path, "mat_cache")):
-        f = open(os.path.join(cache_path, "mat_cache"), "r")
-        global_vars.cache = json.loads(f.read())
+    # if os.path.isfile(os.path.join(cache_path, "mat_cache")):
+    #     f = open(os.path.join(cache_path, "mat_cache"), "r")
+    #     global_vars.cache = json.loads(f.read())
+    #     f.close()
+    if os.path.isfile(os.path.join(cache_path, "asset_cache")):
+        f = open(os.path.join(cache_path, "asset_cache"), "rb")
+        global_vars.assets = pickle.loads(f.read())
         f.close()
     if os.path.isfile(os.path.join(cache_path, "tag_cache")):
         f = open(os.path.join(cache_path, "tag_cache"), "rb")
@@ -189,11 +194,14 @@ def read_cache():
 
 def write_cache():
     cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
-    f = open(os.path.join(cache_path, "mat_cache"), "w")
-    f.write(json.dumps(global_vars.cache))
-    f.close()
+    # f = open(os.path.join(cache_path, "mat_cache"), "w")
+    # f.write(json.dumps(global_vars.cache))
+    # f.close()
     f = open(os.path.join(cache_path, "tag_cache"), "wb")
     f.write(pickle.dumps(global_vars.tags))
+    f.close()
+    f = open(os.path.join(cache_path, "asset_cache"), "wb")
+    f.write(pickle.dumps(global_vars.assets))
     f.close()
 
 
