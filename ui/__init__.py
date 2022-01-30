@@ -16,7 +16,7 @@ class NextPage(bpy.types.Operator):
     def execute(self, context):
         global page
         global pageSize
-        num_pages = math.ceil(float(len(cache)) / float(pageSize))
+        num_pages = math.ceil(float(len(global_vars.cache)) / float(pageSize))
         if page < num_pages - 1:
             page += 1
         return {"FINISHED"}

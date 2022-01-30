@@ -201,6 +201,7 @@ classes = [TagPropertyGroup, FilterSettings, ui.NextPage, ui.PrevPage, SetMateri
 
 
 def register():
+    global_vars.cache_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
     pcoll = bpy.utils.previews.new()
     global_vars.preview_collections["main"] = pcoll
     for i in classes:
@@ -217,3 +218,4 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
