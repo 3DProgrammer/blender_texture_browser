@@ -1,10 +1,9 @@
+import os
+
 import bpy
 import math
 from .. import global_vars
 from .. import asset
-
-page = 0
-pageSize = 25
 
 
 class NextPage(bpy.types.Operator):
@@ -14,11 +13,9 @@ class NextPage(bpy.types.Operator):
     bl_options = {"INTERNAL", "REGISTER"}
 
     def execute(self, context):
-        global page
-        global pageSize
-        num_pages = math.ceil(float(len(global_vars.cache)) / float(pageSize))
-        if page < num_pages - 1:
-            page += 1
+        num_pages = math.ceil(float(len(global_vars.assets)) / float(global_vars.pageSize))
+        if global_vars.page < num_pages - 1:
+            global_vars.page += 1
         return {"FINISHED"}
 
 
@@ -29,9 +26,8 @@ class PrevPage(bpy.types.Operator):
     bl_options = {"INTERNAL", "REGISTER"}
 
     def execute(self, context):
-        global page
-        if page > 0:
-            page -= 1
+        if global_vars.page > 0:
+            global_vars.page -= 1
         return {"FINISHED"}
 
 
@@ -44,29 +40,29 @@ class MaterialSwitcherPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        if not global_vars.cache:
+        if len(global_vars.assets) == 0:
             row = layout.row()
             row.label(text="Cache is empty", icon="ERROR")
         row = layout.row()
         row.operator("material.tex_browser_refresh_cache")
 
 
-def filter_by_name(name, inputs: list):
-    result = []
-    for i in inputs:
-        if name.lower() in i.lower() or name.lower() in global_vars.cache[i]["displayName"].lower():
-            result.append(i)
-    return result
+# def filter_by_name(name, inputs: list):
+#     result = []
+#     for i in inputs:
+#         if name.lower() in i.lower() or name.lower() in global_vars.cache[i]["displayName"].lower():
+#             result.append(i)
+#     return result
 
 
-def filter_by_tag(tag, inputs: list):
-    result = []
-    for i in inputs:
-        for j in global_vars.cache[i]['tags']:
-            if tag.lower() == j.lower():
-                result.append(i)
-                break
-    return result
+# def filter_by_tag(tag, inputs: list):
+#     result = []
+#     for i in inputs:
+#         for j in global_vars.cache[i]['tags']:
+#             if tag.lower() == j.lower():
+#                 result.append(i)
+#                 break
+#     return result
 
 
 class MatBrowserPanel(bpy.types.Panel):
@@ -80,40 +76,62 @@ class MatBrowserPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        keys = list(global_vars.cache.keys())
-        if context.scene.mat_browser_filter_settings.filter_name_bool:
-            keys = filter_by_name(context.scene.mat_browser_filter_settings.filter_name_str, keys)
-        if context.scene.mat_browser_filter_settings.filter_tag_bool:
-            for i in context.scene.mat_browser_filter_settings.tag_props:
-                if i.filter_tag:
-                    keys = filter_by_tag(i.tag_name, keys)
-        keys.sort()
+        # keys = list(global_vars.cache.keys())
+        # if context.scene.mat_browser_filter_settings.filter_name_bool:
+        #     keys = filter_by_name(context.scene.mat_browser_filter_settings.filter_name_str, keys)
+        # if context.scene.mat_browser_filter_settings.filter_tag_bool:
+        #     for i in context.scene.mat_browser_filter_settings.tag_props:
+        #         if i.filter_tag:
+        #             keys = filter_by_tag(i.tag_name, keys)
+        # keys.sort()
+        assets = []
+        for i in global_vars.assets:
+            assets.append(i)  # TODO: Filter assets.
         row = layout.row()
         row.operator("material.tex_browser_prev_page", text="", translate=False, icon="TRIA_LEFT")
-        row.label(text="Page " + str(page + 1) + "/" + str(math.ceil(float(len(keys)) / float(pageSize))))
+        row.label(text="Page " + str(global_vars.page + 1) + "/" + str(
+            math.ceil(float(len(assets)) / float(global_vars.pageSize))))
         row.operator("material.tex_browser_next_page", text="", translate=False, icon="TRIA_RIGHT")
         box = layout.box()
         grid = box.grid_flow(even_columns=True, even_rows=True)
-        startIndex = page * pageSize
-        endIndex = min(startIndex + pageSize, len(keys))
-        keys = keys[startIndex:endIndex]
-        for i in keys:
+        startIndex = global_vars.page * global_vars.pageSize
+        endIndex = min(startIndex + global_vars.pageSize, len(assets))
+        assets = assets[startIndex:endIndex]
+        for i in assets:
             c = grid.box()
-            c.template_icon(icon_value=global_vars.preview_collections["main"][i].icon_id, scale=5)
-            types = asset.get_types(global_vars.cache[i])
-            c.label(text=global_vars.cache[i]["displayName"], translate=False)
-            for x in types:
-                r = c.row()
-                if len(x) > 0:
-                    r.label(text=x[0][2][-3:] + ":")
-                    for y in x:
-                        if y[1]:
-                            props = r.operator("object.tex_browser_set_mat", text=str(y[0]) + "K", translate=False,
-                                               icon="DISK_DRIVE")
-                        else:
-                            props = r.operator("object.tex_browser_set_mat", text=str(y[0]) + "K", translate=False)
-                        props.mat_name = i
-                        props.mat_type = y[2]
+            c.template_icon(icon_value=global_vars.preview_collections["main"][i.full_name()].icon_id, scale=5)
+            types = i.downloads
+            c.label(text=i.fancyName, translate=False)
+            png_row = c.row()
+            jpg_row = c.row()
+            exr_row = c.row()
+            png = False
+            jpg = False
+            exr = False
+            for dltype in types:
+                row = None
+                if dltype.dl_type.format == global_vars.IMG_FORMAT_PNG:
+                    if not png:
+                        png_row.label(text="PNG:")
+                        png = True
+                    row = png_row
+                if dltype.dl_type.format == global_vars.IMG_FORMAT_JPG:
+                    if not jpg:
+                        jpg_row.label(text="JPG:")
+                        jpg = True
+                    row = jpg_row
+                if dltype.dl_type.format == global_vars.IMG_FORMAT_EXR:
+                    if not exr:
+                        exr_row.label(text="EXR:")
+                        exr = True
+                    row = exr_row
+                if os.path.isdir(i.cache_path(dltype.dl_type)):  # TODO: Better cache detection
+                    button = row.operator("object.tex_browser_set_mat", text=dltype.dl_type.ui_name(),
+                                          icon="DISK_DRIVE")
+                else:
+                    button = row.operator("object.tex_browser_set_mat", text=dltype.dl_type.ui_name())
+                button.mat_name = i.full_name()
+                button.dl_type = dltype.dl_type.ui_name()
 
 
 class FilterPanel(bpy.types.Panel):

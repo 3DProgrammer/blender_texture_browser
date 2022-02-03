@@ -19,8 +19,8 @@ bl_info = {
     "category": "Material",
 }
 
-mapswanted = {"Color": "sRGB", "Displacement": "Non-Color", "Metalness": "Non-Color", "NormalGL": "Non-Color",
-              "Roughness": "Non-Color", "Emission": "sRGB"}
+colour_space = {"Metal": "Non-Color", "Rough": "Non-Color", "Normal": "Non-Color", "Colour": "sRGB",
+                "Disp": "Non-Color", "Emit": "sRGB"}
 
 
 class SetMaterial(bpy.types.Operator):
@@ -29,33 +29,32 @@ class SetMaterial(bpy.types.Operator):
     bl_label = "Set Material From Texture Browser"
     bl_options = {"REGISTER", "UNDO"}
     mat_name: bpy.props.StringProperty(name="Material name")
-    mat_type: bpy.props.StringProperty(name="Resolution and format", default="1K-PNG")
+    dl_type: bpy.props.StringProperty(name="Resolution and format", default="1K-PNG")
 
     def execute(self, context):
+        next_asset = None
+        for i in global_vars.assets:
+            if i.full_name() == self.mat_name:
+                next_asset = i
+                break
+        if next_asset is None:
+            return {"FINISHED"}  # This should never happen.
+        asset_dl_type = None
+        for i in next_asset.downloads:
+            if i.dl_type.ui_name() == self.dl_type:
+                asset_dl_type = i
+                break
+        if asset_dl_type is None:
+            return {"FINISHED"}  # This should never happen
+        # The download function should place the assets in the cache path with the following names:
+        # Metal, Rough, Normal, Colour, Disp, Emit
         cache_path = os.path.join(
-            os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache/downloads"),
-                         self.mat_name), self.mat_type)
+            os.path.join(os.path.join(global_vars.cache_dir, "downloads"), next_asset.full_name()),
+            asset_dl_type.dl_type.ui_name())
         if not os.path.isdir(cache_path):
             os.makedirs(cache_path, mode=0o744)
-            for i in global_vars.cache[self.mat_name]["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"][
-                "downloads"]:
-                if i["attribute"] == self.mat_type:
-                    data = requests.get(i["downloadLink"], headers={'User-Agent': "Python"}).content
-                    f = open(os.path.join(cache_path, self.mat_type + ".zip"), "wb")
-                    f.write(data)
-                    f.close()
-                    with zipfile.ZipFile(os.path.join(cache_path, self.mat_type + ".zip"), "r") as zip_ref:
-                        zip_ref.extractall(cache_path)
-                    for x in os.listdir(cache_path):
-                        found = False
-                        for y in mapswanted.keys():
-                            if y in x:
-                                found = True
-                                break
-                        if not found:
-                            os.remove(os.path.join(cache_path, x))
-                    break
-        m = bpy.data.materials.new(self.mat_name)
+            asset_dl_type.dl_func(next_asset, asset_dl_type, cache_path)
+        m = bpy.data.materials.new(next_asset.fancyName)
         m.use_nodes = True
         nt = m.node_tree
         pbsdf = nt.nodes["Principled BSDF"]
@@ -69,23 +68,23 @@ class SetMaterial(bpy.types.Operator):
             node = nt.nodes.new(type="ShaderNodeTexImage")
             nt.links.new(mp.outputs["Vector"], node.inputs["Vector"])
             node.image = img
-            map_type = re.findall(r".*_(.*)\.", i)[0]
-            img.colorspace_settings.name = mapswanted[map_type]
-            if map_type == "Color":
+            map_type = re.findall(r"(.*)\.", i)[0]
+            img.colorspace_settings.name = colour_space[map_type]
+            if map_type == "Colour":
                 nt.links.new(node.outputs["Color"], pbsdf.inputs["Base Color"])
-            elif map_type == "Displacement":
+            elif map_type == "Disp":
                 dp = nt.nodes.new(type="ShaderNodeDisplacement")
                 nt.links.new(node.outputs["Color"], dp.inputs["Height"])
                 nt.links.new(dp.outputs["Displacement"], nt.nodes["Material Output"].inputs["Displacement"])
-            elif map_type == "Metalness":
+            elif map_type == "Metal":
                 nt.links.new(node.outputs["Color"], pbsdf.inputs["Metallic"])
-            elif map_type == "NormalGL":
+            elif map_type == "Normal":
                 nm = nt.nodes.new(type="ShaderNodeNormalMap")
                 nt.links.new(node.outputs["Color"], nm.inputs["Color"])
                 nt.links.new(nm.outputs["Normal"], pbsdf.inputs["Normal"])
-            elif map_type == "Roughness":
+            elif map_type == "Rough":
                 nt.links.new(node.outputs["Color"], pbsdf.inputs["Roughness"])
-            elif map_type == "Emission":
+            elif map_type == "Emit":
                 nt.links.new(node.outputs["Color"], pbsdf.inputs["Emission"])
         for i in context.selected_objects:
             if i.type == "MESH" or i.type == "CURVE":
@@ -104,32 +103,7 @@ class RefreshCache(bpy.types.Operator):
 
     def execute(self, context):
         loader.load()
-        # data = {
-        #     "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
-        #                     "=downloadData,imageData,displayData,tagData"}
-        # while data["nextPageHttp"]:
-        #     print(data["nextPageHttp"])
-        #     data = requests.get(
-        #         data["nextPageHttp"],
-        #         headers={'User-Agent': "Python"}).json()
-        #     for next_asset in data["foundAssets"]:
-        #         for i in next_asset['tags']:
-        #             global_vars.tags.add(i.lower())
-        #         if not next_asset['assetId'] in global_vars.cache:
-        #             global_vars.cache[next_asset['assetId']] = next_asset
-        #             filepath = os.path.join(
-        #                 os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache"), "previews"),
-        #                 next_asset["assetId"] + ".png")
-        #             if not os.path.isfile(filepath):
-        #                 image = requests.get(next_asset["previewImage"]["128-PNG"])
-        #                 f = open(filepath, "wb")
-        #                 f.write(image.content)
-        #                 f.close()
-        #             global_vars.preview_collections["main"].load(next_asset['assetId'], filepath,
-        #                                                          "IMAGE")
         write_cache()
-        # bpy.ops.material.tex_browser_refresh_tags()
-        # print(global_vars.assets)
         return {"FINISHED"}
 
 
@@ -180,15 +154,15 @@ def read_cache():
         f = open(os.path.join(cache_path, "tag_cache"), "rb")
         global_vars.tags = pickle.loads(f.read())
         f.close()
-    if global_vars.cache is not None:
-        for i in global_vars.cache:
-            if not os.path.isfile(os.path.join(os.path.join(cache_path, "previews"), i + ".png")):
-                image = requests.get(global_vars.cache[i]["previewImage"]["128-PNG"])
-                f = open(os.path.join(os.path.join(cache_path, "previews"), i + ".png"), "wb")
+    if global_vars.assets is not None:
+        for i in global_vars.assets:
+            if not os.path.isfile(i.preview_path()):
+                image = requests.get(i.preview_url)
+                f = open(i.preview_path(), "wb")
                 f.write(image.content)
                 f.close()
-            global_vars.preview_collections["main"].load(i,
-                                                         os.path.join(os.path.join(cache_path, "previews"), i + ".png"),
+            global_vars.preview_collections["main"].load(i.full_name(),
+                                                         i.preview_path(),
                                                          "IMAGE")
 
 

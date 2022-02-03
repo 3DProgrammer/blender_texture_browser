@@ -1,8 +1,9 @@
-cache = {}
 preview_collections = {}
 tags: set = set()
 cache_dir: str = "/tmp/"
 assets = []
+page = 0
+pageSize = 25
 
 IMG_FORMAT_PNG = "PNG"
 IMG_FORMAT_JPG = "JPG"
