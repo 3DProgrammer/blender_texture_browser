@@ -85,8 +85,23 @@ class MatBrowserPanel(bpy.types.Panel):
         #             keys = filter_by_tag(i.tag_name, keys)
         # keys.sort()
         assets = []
-        for i in global_vars.assets:
-            assets.append(i)  # TODO: Filter assets.
+        fs = context.scene.mat_browser_filter_settings
+        if fs.filter_name_bool or fs.filter_tag_bool:
+            for i in global_vars.assets:
+                allowed_name = (not fs.filter_name_bool)
+                allowed_name = allowed_name or fs.filter_name_str in i.name or fs.filter_name_str in i.fancyName
+                allowed_tag = (not fs.filter_tag_bool)
+                for j in fs.tag_props:
+                    if allowed_tag: break
+                    if j.filter_tag:
+                        for k in i.tags:
+                            if k == j.tag_name:
+                                allowed_tag = True
+                                break
+                if allowed_name and allowed_tag:
+                    assets.append(i)
+        else:
+            assets = global_vars.assets
         row = layout.row()
         row.operator("material.tex_browser_prev_page", text="", translate=False, icon="TRIA_LEFT")
         row.label(text="Page " + str(global_vars.page + 1) + "/" + str(

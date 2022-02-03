@@ -13,9 +13,9 @@ from . import asset
 from . import loader
 
 bl_info = {
-    "name": "Material Browser",
+    "name": "Texture Browser",
     "blender": (3, 00, 0),
-    "version": (1, 0),
+    "version": (1, 1),
     "category": "Material",
 }
 
