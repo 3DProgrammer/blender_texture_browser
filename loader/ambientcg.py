@@ -29,7 +29,7 @@ def load():
         "nextPageHttp": "https://ambientcg.com/api/v2/full_json?type=PhotoTexturePBR&limit=100&include"
                         "=downloadData,imageData,displayData,tagData"}
     while data["nextPageHttp"]:
-        print(data["nextPageHttp"])
+        print("Requesting "+str(data["nextPageHttp"]))
         data = requests.get(
             data["nextPageHttp"],
             headers={'User-Agent': "Python"}).json()
@@ -42,11 +42,12 @@ def load():
             if "zip" in next_asset["downloadFolders"]["/"]["downloadFiletypeCategories"]:
                 for i in next_asset["downloadFolders"]["/"]["downloadFiletypeCategories"]["zip"]["downloads"]:
                     asset_dls.append(
-                        asset.Download(global_vars.DL_FORMAT_ZIP, asset.infer_dl_type(i["attribute"]), [i["downloadLink"]],
+                        asset.Download(global_vars.DL_FORMAT_ZIP, asset.infer_dl_type(i["attribute"]),
+                                       [i["downloadLink"]],
                                        download_ambientCG))
 
                 new_assets.append(asset.Asset(global_vars.ASSET_SOURCE_AMBIENTCG, next_asset['assetId'],
-                                              next_asset['displayName'], asset_dls, next_asset["previewImage"]["128-PNG"],
+                                              next_asset['displayName'], asset_dls,
+                                              next_asset["previewImage"]["128-PNG"],
                                               list(asset_tags)))
-
     return new_assets

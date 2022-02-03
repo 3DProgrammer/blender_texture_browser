@@ -11,6 +11,7 @@ def load():
         if asset not in global_vars.assets:
             global_vars.assets.append(asset)
         if not os.path.isfile(asset.preview_path()):
+            print(asset.preview_url)
             data = requests.get(asset.preview_url, headers={'User-Agent': "Python"}).content
             f = open(asset.preview_path(), "wb")
             f.write(data)

@@ -27,7 +27,7 @@ def infer_dl_type(name):
     if "exr" in name.lower():
         result.format = global_vars.IMG_FORMAT_EXR
     re_result = re.findall("[^0-9]*([0-9]*).*", name)
-    if len(re_result) > 0:
+    if len(re_result) > 0 and len(re_result[0]) > 0:
         result.resolution = int(re_result[0])
     return result
 
