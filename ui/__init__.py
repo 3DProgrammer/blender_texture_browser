@@ -89,10 +89,12 @@ class MatBrowserPanel(bpy.types.Panel):
         if fs.filter_name_bool or fs.filter_tag_bool:
             for i in global_vars.assets:
                 allowed_name = (not fs.filter_name_bool)
-                allowed_name = allowed_name or fs.filter_name_str in i.name or fs.filter_name_str in i.fancyName
+                allowed_name = allowed_name or fs.filter_name_str.lower() in i.name.lower()
+                allowed_name = allowed_name or fs.filter_name_str.lower() in i.fancyName.lower()
                 allowed_tag = (not fs.filter_tag_bool)
                 for j in fs.tag_props:
-                    if allowed_tag: break
+                    if allowed_tag:
+                        break
                     if j.filter_tag:
                         for k in i.tags:
                             if k == j.tag_name:
