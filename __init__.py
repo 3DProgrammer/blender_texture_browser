@@ -45,7 +45,7 @@ class SetMaterial(bpy.types.Operator):
 				asset_dl_type = i
 				break
 		if asset_dl_type is None:
-			return {"FINISHED"}  # This should never happen
+			return {"FINISHED"}
 		# The download function should place the assets in the cache path with the following names:
 		# Metal, Rough, Normal, Colour, Disp, Emit
 		cache_path = os.path.join(
