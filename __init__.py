@@ -54,40 +54,44 @@ class SetMaterial(bpy.types.Operator):
 		if not os.path.isdir(cache_path):
 			os.makedirs(cache_path, mode=0o744)
 			asset_dl_type.dl_func(next_asset, asset_dl_type, cache_path)
-		m = bpy.data.materials.new(next_asset.fancyName)
-		m.use_nodes = True
-		nt = m.node_tree
-		pbsdf = nt.nodes["Principled BSDF"]
-		tc = nt.nodes.new(type="ShaderNodeTexCoord")
-		mp = nt.nodes.new(type="ShaderNodeMapping")
-		nt.links.new(tc.outputs["UV"], mp.inputs["Vector"])
-		for i in os.listdir(cache_path):
-			if next_asset.full_name() + i in bpy.data.images:
-				img = bpy.data.images[next_asset.full_name() + i]
-			else:
-				img = bpy.data.images.load(os.path.join(cache_path, i))
-				img.name = next_asset.full_name() + i
-			node = nt.nodes.new(type="ShaderNodeTexImage")
-			nt.links.new(mp.outputs["Vector"], node.inputs["Vector"])
-			node.image = img
-			map_type = re.findall(r"(.*)\.", i)[0]
-			img.colorspace_settings.name = colour_space[map_type]
-			if map_type == "Colour":
-				nt.links.new(node.outputs["Color"], pbsdf.inputs["Base Color"])
-			elif map_type == "Disp":
-				dp = nt.nodes.new(type="ShaderNodeDisplacement")
-				nt.links.new(node.outputs["Color"], dp.inputs["Height"])
-				nt.links.new(dp.outputs["Displacement"], nt.nodes["Material Output"].inputs["Displacement"])
-			elif map_type == "Metal":
-				nt.links.new(node.outputs["Color"], pbsdf.inputs["Metallic"])
-			elif map_type == "Normal":
-				nm = nt.nodes.new(type="ShaderNodeNormalMap")
-				nt.links.new(node.outputs["Color"], nm.inputs["Color"])
-				nt.links.new(nm.outputs["Normal"], pbsdf.inputs["Normal"])
-			elif map_type == "Rough":
-				nt.links.new(node.outputs["Color"], pbsdf.inputs["Roughness"])
-			elif map_type == "Emit":
-				nt.links.new(node.outputs["Color"], pbsdf.inputs["Emission"])
+		if next_asset.fancyName in bpy.data.materials and bpy.context.preferences.addons[
+			'blender_texture_browser'].preferences.duplicate_behaviour == 'existing':
+			m = bpy.data.materials[next_asset.fancyName]
+		else:
+			m = bpy.data.materials.new(next_asset.fancyName)
+			m.use_nodes = True
+			nt = m.node_tree
+			pbsdf = nt.nodes["Principled BSDF"]
+			tc = nt.nodes.new(type="ShaderNodeTexCoord")
+			mp = nt.nodes.new(type="ShaderNodeMapping")
+			nt.links.new(tc.outputs["UV"], mp.inputs["Vector"])
+			for i in os.listdir(cache_path):
+				if next_asset.full_name() + i in bpy.data.images:
+					img = bpy.data.images[next_asset.full_name() + i]
+				else:
+					img = bpy.data.images.load(os.path.join(cache_path, i))
+					img.name = next_asset.full_name() + i
+				node = nt.nodes.new(type="ShaderNodeTexImage")
+				nt.links.new(mp.outputs["Vector"], node.inputs["Vector"])
+				node.image = img
+				map_type = re.findall(r"(.*)\.", i)[0]
+				img.colorspace_settings.name = colour_space[map_type]
+				if map_type == "Colour":
+					nt.links.new(node.outputs["Color"], pbsdf.inputs["Base Color"])
+				elif map_type == "Disp":
+					dp = nt.nodes.new(type="ShaderNodeDisplacement")
+					nt.links.new(node.outputs["Color"], dp.inputs["Height"])
+					nt.links.new(dp.outputs["Displacement"], nt.nodes["Material Output"].inputs["Displacement"])
+				elif map_type == "Metal":
+					nt.links.new(node.outputs["Color"], pbsdf.inputs["Metallic"])
+				elif map_type == "Normal":
+					nm = nt.nodes.new(type="ShaderNodeNormalMap")
+					nt.links.new(node.outputs["Color"], nm.inputs["Color"])
+					nt.links.new(nm.outputs["Normal"], pbsdf.inputs["Normal"])
+				elif map_type == "Rough":
+					nt.links.new(node.outputs["Color"], pbsdf.inputs["Roughness"])
+				elif map_type == "Emit":
+					nt.links.new(node.outputs["Color"], pbsdf.inputs["Emission"])
 		for i in context.selected_objects:
 			if i.type == "MESH" or i.type == "CURVE":
 				if len(i.material_slots) == 0:
@@ -168,6 +172,20 @@ def read_cache():
 														 "IMAGE")
 
 
+class AddonPreferences(bpy.types.AddonPreferences):
+	bl_idname = __name__
+	duplicate_behaviour: bpy.props.EnumProperty(
+		items=[("existing", "Use existing material", "", "", 0), ("new", "Create new material", "", "", 1)],
+		default="existing")
+
+	def draw(self, context):
+		print("Drawing")
+		layout = self.layout
+		layout.label(text="Duplicate material behaviour:")
+		r = layout.row()
+		r.prop(self, "duplicate_behaviour", expand=True)
+
+
 def write_cache():
 	cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cache")
 	# f = open(os.path.join(cache_path, "mat_cache"), "w")
@@ -183,7 +201,7 @@ def write_cache():
 
 classes = [TagPropertyGroup, FilterSettings, ui.NextPage, ui.PrevPage, SetMaterial, ui.MaterialSwitcherPanel,
 		   ui.FilterPanel,
-		   ui.FilterNamePanel, ui.FilterTagPanel, ui.MatBrowserPanel, RefreshCache, RefreshTags]
+		   ui.FilterNamePanel, ui.FilterTagPanel, ui.MatBrowserPanel, RefreshCache, RefreshTags, AddonPreferences]
 
 
 def register():
