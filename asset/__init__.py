@@ -18,6 +18,8 @@ class DownloadType:
 
 def infer_dl_type(name):
     result = DownloadType(1, global_vars.IMG_FORMAT_PNG)
+    if "hdr" in name.lower(): # Check HDR before others, because sometimes included without referring to format.
+        result.format = global_vars.IMG_FORMAT_HDR
     if "png" in name.lower():
         result.format = global_vars.IMG_FORMAT_PNG
     if "jpg" in name.lower():

@@ -101,6 +101,63 @@ class SetMaterial(bpy.types.Operator):
 		return {"FINISHED"}
 
 
+class SetHdri(bpy.types.Operator):
+	"""Sets the material for the object"""
+	bl_idname = "object.tex_browser_set_hdri"
+	bl_label = "Set HDRI From Texture Browser"
+	bl_options = {"REGISTER", "UNDO"}
+	mat_name: bpy.props.StringProperty(name="HDRI name")
+	dl_type: bpy.props.StringProperty(name="Resolution and format", default="1K-PNG")
+
+	def execute(self, context):
+		next_asset = None
+		for i in global_vars.hdris:
+			if i.full_name() == self.mat_name:
+				next_asset = i
+				break
+		if next_asset is None:
+			return {"FINISHED"}  # This should never happen.
+		asset_dl_type = None
+		for i in next_asset.downloads:
+			if i.dl_type.ui_name() == self.dl_type:
+				asset_dl_type = i
+				break
+		if asset_dl_type is None:
+			return {"FINISHED"}
+		# The download function should place the assets in the cache path with the following names:
+		# HDRI+asset_dl_type.dl_type.fmt
+		cache_path = os.path.join(
+			os.path.join(os.path.join(global_vars.cache_dir, "downloads"), next_asset.full_name()),
+			asset_dl_type.dl_type.ui_name())
+		if not os.path.isdir(cache_path):
+			os.makedirs(cache_path, mode=0o744)
+			asset_dl_type.dl_func(next_asset, asset_dl_type, cache_path)
+		if next_asset.fancyName in bpy.data.worlds and bpy.context.preferences.addons[
+			# TODO: Separate option for worlds
+			'blender_texture_browser'].preferences.duplicate_behaviour == 'existing':
+			m = bpy.data.worlds[next_asset.fancyName]
+		else:
+			m = bpy.data.worlds.new(next_asset.fancyName)
+		m.use_nodes = True
+		nt = m.node_tree
+		bg = nt.nodes['Background']
+		tc = nt.nodes.new(type="ShaderNodeTexCoord")
+		mp = nt.nodes.new(type="ShaderNodeMapping")
+		nt.links.new(tc.outputs["Generated"], mp.inputs["Vector"])
+		et = nt.nodes.new(type="ShaderNodeTexEnvironment")
+		if next_asset.full_name() in bpy.data.images:
+			img = bpy.data.images[next_asset.full_name()]
+		else:
+			img = bpy.data.images.load(os.path.join(cache_path, "HDRI." + asset_dl_type.dl_type.format.lower()))
+			img.colorspace_settings.name = "sRGB"
+			img.name = next_asset.full_name()
+		et.image = img
+		nt.links.new(mp.outputs["Vector"], et.inputs["Vector"])
+		nt.links.new(et.outputs["Color"], bg.inputs["Color"])
+		context.scene.world = m
+		return {"FINISHED"}
+
+
 class RefreshCache(bpy.types.Operator):
 	"""Refreshes the material cache"""
 	bl_idname = "material.tex_browser_refresh_cache"
@@ -156,12 +213,26 @@ def read_cache():
 		f = open(os.path.join(cache_path, "asset_cache"), "rb")
 		global_vars.assets = pickle.loads(f.read())
 		f.close()
+	if os.path.isfile(os.path.join(cache_path, "hdri_cache")):
+		f = open(os.path.join(cache_path, "hdri_cache"), "rb")
+		global_vars.hdris = pickle.loads(f.read())
+		f.close()
 	if os.path.isfile(os.path.join(cache_path, "tag_cache")):
 		f = open(os.path.join(cache_path, "tag_cache"), "rb")
 		global_vars.tags = pickle.loads(f.read())
 		f.close()
 	if global_vars.assets is not None:
 		for i in global_vars.assets:
+			if not os.path.isfile(i.preview_path()):
+				image = requests.get(i.preview_url)
+				f = open(i.preview_path(), "wb")
+				f.write(image.content)
+				f.close()
+			global_vars.preview_collections["main"].load(i.full_name(),
+														 i.preview_path(),
+														 "IMAGE")
+	if global_vars.hdris is not None:
+		for i in global_vars.hdris:
 			if not os.path.isfile(i.preview_path()):
 				image = requests.get(i.preview_url)
 				f = open(i.preview_path(), "wb")
@@ -197,11 +268,16 @@ def write_cache():
 	f = open(os.path.join(cache_path, "asset_cache"), "wb")
 	f.write(pickle.dumps(global_vars.assets))
 	f.close()
+	f = open(os.path.join(cache_path, "hdri_cache"), "wb")
+	f.write(pickle.dumps(global_vars.hdris))
+	f.close()
 
 
 classes = [TagPropertyGroup, FilterSettings, ui.NextPage, ui.PrevPage, SetMaterial, ui.MaterialSwitcherPanel,
 		   ui.FilterPanel,
-		   ui.FilterNamePanel, ui.FilterTagPanel, ui.MatBrowserPanel, RefreshCache, RefreshTags, AddonPreferences]
+		   ui.FilterNamePanel, ui.FilterTagPanel, ui.MatBrowserPanel, RefreshCache, RefreshTags, AddonPreferences,
+		   SetHdri, ui.HdriMaterialSwitcherPanel, ui.HdriFilterPanel, ui.HdriFilterNamePanel,
+		   ui.HdriFilterTagPanel, ui.HdriBrowserPanel]
 
 
 def register():

@@ -17,10 +17,47 @@ def download_polyhaven(dl_asset: asset.Asset, dl_type: asset.Download, cache_pat
 		if i in dl_data:
 			dl_link = dl_data[i][str(dl_type.dl_type.resolution) + "k"][dl_type.dl_type.format.lower()]['url']
 			print(dl_link)
-			f = open(os.path.join(cache_path, translations[i]+"."+dl_type.dl_type.format.lower()), "wb")
+			f = open(os.path.join(cache_path, translations[i] + "." + dl_type.dl_type.format.lower()), "wb")
 			f.write(requests.get(dl_link).content)
 			f.close()
 
+# The download function should place the assets in the cache path with the following names:
+		# HDRI+asset_dl_type.dl_type.fmt
+def download_polyhaven_hdri(dl_asset: asset.Asset, dl_type: asset.Download, cache_path):
+	print("Downloading HDRI " + dl_asset.fancyName + " from " + str(dl_type.urls['url']))
+	dl_link = dl_type.urls['url']
+	f = open(os.path.join(cache_path, "HDRI." + dl_type.dl_type.format.lower()), "wb")
+	f.write(requests.get(dl_link).content)
+	f.close()
+
+
+def load_hdris():
+	new_assets = []
+	data = requests.get("https://api.polyhaven.com/assets?t=hdris").json()
+	for new_asset_name in list(data):
+		print("Downloading asset " + new_asset_name)
+		dl_data = requests.get("https://api.polyhaven.com/files/" + new_asset_name).json()
+		info_data = requests.get("https://api.polyhaven.com/info/" + new_asset_name).json()
+		asset_tags = set()
+		for i in info_data['tags']:
+			asset_tags.add(i.lower())
+			global_vars.tags.add(i.lower())
+		for i in info_data['categories']:
+			asset_tags.add(i.lower())
+			global_vars.tags.add(i.lower())
+		asset_dls = []
+		for i in dl_data['hdri']:
+			for img_format in dl_data['hdri'][i]:
+				print(asset.infer_dl_type(i + img_format).format,
+					  str(asset.infer_dl_type(i + img_format).resolution) + 'K')
+				asset_dls.append(
+					asset.Download(global_vars.DL_FORMAT_SINGLE, asset.infer_dl_type(i + img_format), dl_data['hdri'][i][img_format],
+								   download_polyhaven_hdri))
+		new_assets.append(asset.Asset(global_vars.ASSET_SOURCE_POLYHAVEN, new_asset_name, info_data['name'], asset_dls,
+									  "https://cdn.polyhaven.com/asset_img/thumbs/" + new_asset_name + ".png?width=255&height=255&format=png",
+									  list(asset_tags)))
+
+	return new_assets
 
 
 def load():
